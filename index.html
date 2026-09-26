@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#1d2433" />
+    <title>Tiny Planet Courier</title>
+    <meta
+      name="description"
+      content="Deliver parcels to the inhabitants of a miniature planet. A browser-based 3D multiplayer toy."
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%238ccb5e'/%3E%3Ccircle cx='11' cy='12' r='4' fill='%232f7f58'/%3E%3Crect x='17' y='16' width='9' height='9' rx='1.5' fill='%23d9a066'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <!-- ------------------------------------------------------------ loading -->
+    <!-- Static markup so the first paint happens before the bundle parses. -->
+    <div id="loading" class="screen">
+      <div class="card loading-card">
+        <div class="logo" aria-hidden="true">
+          <span class="logo-planet"></span>
+          <span class="logo-parcel"></span>
+        </div>
+        <h1>Tiny Planet Courier</h1>
+        <p class="tagline">Building a small world&hellip;</p>
+        <div class="bar" role="progressbar" aria-labelledby="load-label">
+          <div class="bar-fill" id="load-bar"></div>
+        </div>
+        <p class="load-label" id="load-label">Warming up</p>
+      </div>
+    </div>
+
+    <!-- -------------------------------------------------------------- title -->
+    <div id="title" class="screen hidden">
+      <div class="card title-card">
+        <div class="logo" aria-hidden="true">
+          <span class="logo-planet"></span>
+          <span class="logo-parcel"></span>
+        </div>
+        <h1>Tiny Planet Courier</h1>
+        <p class="tagline">
+          Parcels do not deliver themselves. Walk the whole way round if you have to.
+        </p>
+
+        <label class="field">
+          <span>Your name</span>
+          <input id="name-input" type="text" maxlength="18" placeholder="Courier" autocomplete="off" spellcheck="false" />
+        </label>
+
+        <button id="play" class="primary">Start delivering</button>
+
+        <div class="title-columns">
+          <div class="controls-summary">
+            <h2>Controls</h2>
+            <ul>
+              <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</li>
+              <li><kbd>Shift</kbd> run</li>
+              <li><kbd>Space</kbd> jump</li>
+              <li><kbd>E</kbd> pick up / hand over</li>
+              <li><kbd>1</kbd>&ndash;<kbd>6</kbd> react</li>
+              <li>Mouse look &middot; wheel zooms</li>
+              <li><kbd>Tab</kbd> customise &middot; <kbd>Esc</kbd> pause</li>
+            </ul>
+            <p class="touch-note">On a phone: left thumb walks, right thumb looks.</p>
+          </div>
+          <div class="leaderboard">
+            <h2>Top couriers</h2>
+            <ol id="leaderboard-list">
+              <li class="empty">No rounds recorded yet.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------------------- hud -->
+    <div id="hud" class="hidden">
+      <div class="hud-top-left">
+        <div id="objective" class="objective">
+          <div class="objective-kind" id="objective-kind">Objective</div>
+          <div class="objective-text" id="objective-text">&mdash;</div>
+          <div class="objective-meta">
+            <span id="objective-zone"></span>
+            <span id="objective-distance"></span>
+          </div>
+        </div>
+        <div id="timer" class="timer hidden">
+          <div class="timer-fill" id="timer-fill"></div>
+        </div>
+      </div>
+
+      <div class="hud-top-right">
+        <div class="score-block">
+          <div class="score" id="score">0</div>
+          <div class="score-meta">
+            <span id="deliveries">0 delivered</span>
+            <span id="streak"></span>
+          </div>
+        </div>
+        <div class="net-pill" id="net-pill">
+          <span class="dot" id="net-dot"></span>
+          <span id="net-text">offline</span>
+        </div>
+        <div class="stats hidden" id="stats"></div>
+      </div>
+
+      <!-- Compass arrow: points at the objective when it is off-screen. -->
+      <div id="compass" class="compass hidden">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 2 L19 20 L12 16 L5 20 Z" />
+        </svg>
+      </div>
+
+      <div id="prompt" class="prompt hidden">
+        <kbd id="prompt-key">E</kbd>
+        <span id="prompt-text"></span>
+      </div>
+
+      <div id="toast" class="toast"></div>
+
+      <div class="emoji-bar" id="emoji-bar"></div>
+
+      <button class="icon-button hud-menu" id="hud-menu" title="Pause (Esc)" aria-label="Pause">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+      </button>
+    </div>
+
+    <!-- ------------------------------------------------------------- panels -->
+    <div id="panel-pause" class="panel hidden">
+      <div class="card">
+        <h2>Paused</h2>
+        <div class="panel-buttons">
+          <button class="primary" data-action="resume">Resume</button>
+          <button data-action="customize">Customise courier</button>
+          <button data-action="settings">Settings</button>
+          <button data-action="help">How to play</button>
+        </div>
+        <p class="hint">Press <kbd>Esc</kbd> to resume.</p>
+      </div>
+    </div>
+
+    <div id="panel-customize" class="panel hidden">
+      <div class="card">
+        <h2>Customise courier</h2>
+
+        <label class="field">
+          <span>Name</span>
+          <input id="customize-name" type="text" maxlength="18" placeholder="Courier" autocomplete="off" />
+        </label>
+
+        <div class="field">
+          <span>Outfit</span>
+          <div class="swatches" id="swatch-outfit"></div>
+        </div>
+
+        <div class="field">
+          <span>Skin tone</span>
+          <div class="swatches" id="swatch-skin"></div>
+        </div>
+
+        <div class="field">
+          <span>Headgear</span>
+          <div class="chips" id="chips-hat"></div>
+        </div>
+
+        <div class="panel-buttons">
+          <button class="primary" data-action="close">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="panel-settings" class="panel hidden">
+      <div class="card">
+        <h2>Settings</h2>
+
+        <div class="field">
+          <span>Graphics</span>
+          <div class="chips" id="chips-quality">
+            <button data-quality="high">High</button>
+            <button data-quality="low">Low</button>
+          </div>
+          <p class="hint">Low drops shadows, outlines and resolution. Use it if the frame rate dips.</p>
+        </div>
+
+        <label class="field">
+          <span>Volume <output id="volume-value">70%</output></span>
+          <input id="volume" type="range" min="0" max="100" step="1" value="70" />
+        </label>
+
+        <label class="toggle">
+          <input id="muted" type="checkbox" />
+          <span>Mute everything</span>
+        </label>
+
+        <label class="toggle">
+          <input id="invert-y" type="checkbox" />
+          <span>Invert vertical look</span>
+        </label>
+
+        <label class="toggle">
+          <input id="show-fps" type="checkbox" />
+          <span>Show performance stats</span>
+        </label>
+
+        <div class="panel-buttons">
+          <button class="primary" data-action="close">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="panel-help" class="panel hidden">
+      <div class="card">
+        <h2>How to play</h2>
+        <ol class="help-list">
+          <li>Walk to the <strong>depot</strong> in Harborlight Meadow and press <kbd>E</kbd> to collect a parcel.</li>
+          <li>A <strong>gold beacon</strong> marks your drop-off. The arrow at the edge of the screen points the way when it is behind you.</li>
+          <li>Get there and press <kbd>E</kbd> again. Deliver promptly for a time bonus, and chain deliveries for a streak.</li>
+          <li>The planet is a sphere &mdash; you can never walk off the edge, and the shortest route sometimes goes over a mountain.</li>
+        </ol>
+        <h3>Controls</h3>
+        <div class="key-grid">
+          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Walk</span></div>
+          <div><kbd>Shift</kbd><span>Run</span></div>
+          <div><kbd>Space</kbd><span>Jump</span></div>
+          <div><kbd>E</kbd><span>Pick up / hand over / talk</span></div>
+          <div><kbd>1</kbd>&ndash;<kbd>6</kbd><span>Emoji reaction</span></div>
+          <div><kbd>Tab</kbd><span>Customise</span></div>
+          <div><kbd>G</kbd><span>Toggle graphics quality</span></div>
+          <div><kbd>M</kbd><span>Mute</span></div>
+          <div><kbd>Esc</kbd><span>Pause</span></div>
+        </div>
+        <div class="panel-buttons">
+          <button class="primary" data-action="close">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ touch controls -->
+    <div id="touch" class="touch hidden">
+      <div class="stick-zone" id="stick-zone">
+        <div class="stick-base" id="stick-base">
+          <div class="stick-knob" id="stick-knob"></div>
+        </div>
+      </div>
+      <div class="touch-buttons">
+        <button class="touch-button" id="touch-emoji" aria-label="React">🙂</button>
+        <button class="touch-button" id="touch-run" aria-label="Run">Run</button>
+        <button class="touch-button wide" id="touch-interact" aria-label="Interact">E</button>
+        <button class="touch-button" id="touch-jump" aria-label="Jump">Jump</button>
+      </div>
+      <div class="look-zone" id="look-zone"></div>
+    </div>
+
+    <noscript>
+      <div class="screen">
+        <div class="card">
+          <h1>Tiny Planet Courier</h1>
+          <p>This game needs JavaScript and WebGL.</p>
+        </div>
+      </div>
+    </noscript>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

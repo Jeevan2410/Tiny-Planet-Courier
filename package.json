@@ -1,0 +1,29 @@
+{
+  "name": "tiny-planet-courier",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A browser-based 3D delivery game on a tiny planet.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "server": "node server/src/index.ts",
+    "dev:all": "concurrently -k -n web,realtime -c cyan,magenta \"npm:dev\" \"npm:server\""
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "gsap": "^3.12.5",
+    "socket.io-client": "^4.7.5",
+    "three": "^0.169.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "concurrently": "^9.0.1",
+    "socket.io": "^4.7.5",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}
