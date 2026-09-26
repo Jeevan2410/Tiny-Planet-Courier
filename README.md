@@ -1,11 +1,16 @@
 # Tiny Planet Courier
 
+**Play: <https://tiny-planet-courier.vercel.app>**
+
 A single-page, browser-based 3D delivery game. You play a courier on a miniature
 spherical planet, carrying parcels from the depot to mailboxes and villagers
 scattered across five biomes. Other players appear in real time and can throw
 floating emoji at you.
 
 No install, no sign-in, no downloaded art. Desktop and mobile.
+
+Frontend on Vercel (auto-deploys from `main`), realtime and Postgres on Supabase.
+There is no game server to run.
 
 ---
 
