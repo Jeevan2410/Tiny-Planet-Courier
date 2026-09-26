@@ -12,7 +12,6 @@
 import { Group, Object3D, Vector3 } from 'three';
 import { Courier, type PoseInput } from './Courier';
 import type { Cosmetics } from '../state/store';
-import { loadCourierGltf, GltfRig } from './GltfRig';
 
 export type { PoseInput };
 
@@ -39,17 +38,40 @@ type RigFactory = (cosmetics: Cosmetics) => CourierRig;
 
 let factory: RigFactory | null = null;
 
+/** Is there an authored model to load? A HEAD request, so it costs nothing. */
+async function modelExists(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { method: 'HEAD' });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resolve which rig implementation to use. Call once during world generation;
  * every rig created afterwards (including remote players) uses the result.
+ *
+ * GltfRig is imported dynamically on purpose. It pulls in GLTFLoader,
+ * DRACOLoader and SkeletonUtils, which together add ~35KB gzipped -- real money
+ * for a game whose whole download is under 300KB, and pure waste when no
+ * authored model is present. Probing with HEAD first means that code only ever
+ * reaches a browser that is actually going to use it.
  */
 export async function initCourierRigs(): Promise<'gltf' | 'procedural'> {
   if (factory) return factory === proceduralFactory ? 'procedural' : 'gltf';
 
-  const loaded = await loadCourierGltf(MODEL_URL);
-  if (loaded) {
-    factory = (cosmetics) => new GltfRig(loaded, cosmetics);
-    return 'gltf';
+  if (await modelExists(MODEL_URL)) {
+    try {
+      const { loadCourierGltf, GltfRig } = await import('./GltfRig');
+      const loaded = await loadCourierGltf(MODEL_URL);
+      if (loaded) {
+        factory = (cosmetics) => new GltfRig(loaded, cosmetics);
+        return 'gltf';
+      }
+    } catch (error) {
+      console.warn('[rig] authored model failed to load, using the procedural rig:', error);
+    }
   }
 
   factory = proceduralFactory;

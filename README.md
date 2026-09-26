@@ -346,7 +346,7 @@ Worth stating plainly:
 - **No authored art ships with the game.** Every mesh is generated from
   primitives in TypeScript at load time, and every sound is synthesised. This was
   a constraint of the build environment, not a preference — but it does mean the
-  game downloads ~270KB gzipped total and needs no CDN. The seam for replacing
+  game downloads ~290KB gzipped and needs no CDN. The seam for replacing
   it is real and tested, not aspirational: see "Adding real art" above.
 - **React Three Fiber was not used.** The brief listed it as optional; plain
   Three.js with a vanilla Zustand store keeps the bundle smaller and the frame
