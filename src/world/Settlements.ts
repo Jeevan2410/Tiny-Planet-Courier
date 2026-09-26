@@ -63,10 +63,25 @@ export interface Blocker {
   radius: number;
 }
 
+/**
+ * What a villager is doing with their day.
+ *
+ * "wander" is the old aimless drift. The others exist because a town full of
+ * people milling about at random reads as a screensaver -- somebody kneeling
+ * over a planter or walking a fixed route with purpose is what makes a place
+ * look inhabited.
+ */
+export type NpcActivity = 'wander' | 'commute' | 'tend' | 'sit' | 'chat';
+
 export interface NpcSpawn {
   dir: Vector3;
   /** Radius in world units the NPC will wander inside. */
   roam: number;
+  activity?: NpcActivity;
+  /** Waypoints for a 'commute' villager, walked as a loop. */
+  route?: Vector3[];
+  /** Who a 'chat' villager is turned toward. */
+  facingPoint?: Vector3;
 }
 
 /**
@@ -451,10 +466,73 @@ export class Settlements {
     }
 
     this.dressStreets(spec, frame, rng);
+    this.populateTown(frame, rng);
+  }
 
-    for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2 + 0.7;
-      this.npcSpawns.push({ dir: frame.ring(angle, randRange(rng, 2.6, 5.4)).clone(), roam: 3.2 });
+  /**
+   * Give the town a population that is visibly doing something.
+   *
+   * A crowd of aimless wanderers reads as a screensaver. A few commuters
+   * walking a fixed loop, somebody kneeling over a verge, a pair talking on the
+   * green and two people sat on benches is a far smaller number of villagers
+   * doing far more work.
+   */
+  private populateTown(frame: LocalFrame, rng: Rng): void {
+    const plaza = frame.center;
+
+    // Commuters walking the ring road. They share one loop of waypoints but
+    // start at different points around it, so they spread out naturally.
+    const route: Vector3[] = [];
+    const stops = 8;
+    for (let i = 0; i < stops; i++) {
+      route.push(frame.ring((i / stops) * Math.PI * 2, RING_RADIUS).clone());
+    }
+    for (let i = 0; i < 3; i++) {
+      const start = Math.floor((i / 3) * stops);
+      this.npcSpawns.push({
+        dir: route[start].clone(),
+        roam: 0,
+        activity: 'commute',
+        route: route.map((w) => w.clone()),
+      });
+    }
+
+    // Somebody tending the verge outside a couple of the plots.
+    for (const plot of [2, 6]) {
+      const dir = frame.ring(houseAngle(plot) + 0.08, RING_RADIUS + 1.1, new Vector3());
+      if (!this.isBuildable(dir)) continue;
+      this.npcSpawns.push({
+        dir,
+        roam: 0,
+        activity: 'tend',
+        facingPoint: frame.ring(houseAngle(plot) + 0.08, RING_RADIUS + 2.2, new Vector3()),
+      });
+    }
+
+    // Two people talking on the green, turned toward each other.
+    const a = frame.at(-1.4, -2.2, new Vector3());
+    const b = frame.at(-0.35, -2.5, new Vector3());
+    this.npcSpawns.push({ dir: a.clone(), roam: 0, activity: 'chat', facingPoint: b.clone() });
+    this.npcSpawns.push({ dir: b.clone(), roam: 0, activity: 'chat', facingPoint: a.clone() });
+
+    // Sitting on the plaza benches, facing out across the green.
+    for (const i of [0, 2]) {
+      const angle = (i / 4) * Math.PI * 2 + 0.4;
+      const dir = frame.ring(angle, 2.1, new Vector3());
+      this.npcSpawns.push({
+        dir,
+        roam: 0,
+        activity: 'sit',
+        facingPoint: plaza.clone(),
+      });
+    }
+
+    // A couple of genuine wanderers, so the town is not entirely choreographed.
+    for (let i = 0; i < 2; i++) {
+      this.npcSpawns.push({
+        dir: frame.ring(i * 2.7 + 0.9, randRange(rng, 3.2, 5.2)).clone(),
+        roam: 3.0,
+      });
     }
   }
 

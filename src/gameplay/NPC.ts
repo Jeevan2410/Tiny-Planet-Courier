@@ -36,7 +36,7 @@ import {
 } from '../util/sphere';
 import type { Planet } from '../world/Planet';
 import { Assembly } from '../world/props';
-import type { NpcSpawn } from '../world/Settlements';
+import type { NpcActivity, NpcSpawn } from '../world/Settlements';
 import { idleLine, RECIPIENT_NAMES } from './dialogue';
 
 interface Villager {
@@ -60,6 +60,20 @@ interface Villager {
   stride: number;
   /** Set while this villager is the delivery target. */
   waiting: boolean;
+
+  activity: NpcActivity;
+  /** Waypoints for a commuter, walked as a loop. */
+  route: Vector3[] | null;
+  routeIndex: number;
+  /** Where a stationary villager is turned to look. */
+  facingPoint: Vector3 | null;
+  /**
+   * 0..1 blend into the activity's pose. Eased rather than snapped so a
+   * villager lowers into a crouch instead of popping into one.
+   */
+  pose: number;
+  /** Per-villager phase offset so a crowd does not breathe in unison. */
+  phase: number;
 }
 
 const WALK_SPEED = 1.35;
@@ -70,6 +84,9 @@ const _q = new Quaternion();
 const _scale = new Vector3();
 const _m = new Matrix4();
 const _toTarget = new Vector3();
+const _poseQ = new Quaternion();
+/** Local +X: the model faces +Z, so rotating about X pitches it forward. */
+const _pitchAxis = new Vector3(1, 0, 0);
 
 export class Villagers {
   readonly group = new Group();
@@ -112,6 +129,12 @@ export class Villagers {
         speed: 0,
         stride: rng() * Math.PI * 2,
         waiting: false,
+        activity: spawn.activity ?? 'wander',
+        route: spawn.route ? spawn.route.map((w) => w.clone().normalize()) : null,
+        routeIndex: 0,
+        facingPoint: spawn.facingPoint ? spawn.facingPoint.clone().normalize() : null,
+        pose: 0,
+        phase: rng() * Math.PI * 2,
       };
       buckets[variant].push(villager);
       this.villagers.push(villager);
@@ -161,17 +184,82 @@ export class Villagers {
 
     const moving = villager.speed > 0.05;
     const bob = moving ? Math.abs(Math.sin(villager.stride)) * 0.075 : 0;
-    const breathe = moving ? 0 : Math.sin(villager.stride * 0.6) * 0.012;
-    _pos.addScaledVector(_up, bob + breathe - 0.04);
+    const breathe = moving ? 0 : Math.sin(villager.stride * 0.6 + villager.phase) * 0.012;
 
     surfaceQuaternion(_up, villager.facing, _q);
 
     // Squash and stretch: compresses on landing, stretches at the top of the hop.
     const squash = moving ? Math.cos(villager.stride * 2) * 0.05 : 0;
-    _scale.set(1 + squash, 1 - squash, 1 + squash);
+    let scaleY = 1 - squash;
+    let lift = bob + breathe - 0.04;
+    let pitch = 0;
+
+    // Activity poses. Villagers are instanced, so the only channel available is
+    // the instance matrix -- which turns out to be enough: a crouch is a drop,
+    // a squash and a forward tilt, and at this scale that reads clearly as
+    // somebody kneeling over their planter.
+    const pose = villager.pose;
+    if (pose > 0.001) {
+      const working = Math.sin(villager.stride * 1.6 + villager.phase);
+      switch (villager.activity) {
+        // The instance matrix scales about the villager's feet, so shrinking Y
+        // already lowers the head without moving the origin. An extra downward
+        // lift on top of that just buries them to the knees.
+        case 'tend':
+          lift -= 0.04 * pose;
+          scaleY *= 1 - 0.28 * pose;
+          pitch += (0.62 + working * 0.09) * pose;
+          break;
+        case 'sit':
+          // Raised onto the bench seat rather than dropped into the ground.
+          lift += 0.3 * pose;
+          scaleY *= 1 - 0.3 * pose;
+          pitch -= 0.08 * pose;
+          break;
+        default:
+          // Chatting: a slow nod and a little weight shift.
+          pitch += working * 0.05 * pose;
+          lift += Math.sin(villager.stride * 0.9 + villager.phase) * 0.015 * pose;
+          break;
+      }
+      if (pitch !== 0) _q.multiply(_poseQ.setFromAxisAngle(_pitchAxis, pitch));
+    }
+
+    _pos.addScaledVector(_up, lift);
+    _scale.set(1 + squash, scaleY, 1 + squash);
 
     _m.compose(_pos, _q, _scale);
     mesh.setMatrixAt(villager.index, _m);
+  }
+
+  /**
+   * Walk a fixed loop of waypoints. Commuters are what sell a street as a
+   * thoroughfare rather than a diorama: somebody is always going somewhere.
+   */
+  private followRoute(villager: Villager, dt: number): void {
+    const route = villager.route;
+    if (!route || route.length === 0) return;
+
+    const waypoint = route[villager.routeIndex % route.length];
+    const remaining = surfaceDistance(villager.dir, waypoint, this.planet.radius);
+
+    if (remaining < 0.6) {
+      villager.routeIndex = (villager.routeIndex + 1) % route.length;
+      // A brief pause at each waypoint stops the loop looking mechanical.
+      villager.timer = randRange(this.rng, 0.2, 1.6);
+    }
+
+    if (villager.timer > 0 && remaining < 1.2) {
+      villager.speed += (0 - villager.speed) * damp(0.25, dt);
+      return;
+    }
+
+    villager.speed += (WALK_SPEED * 1.15 - villager.speed) * damp(0.16, dt);
+    _toTarget.copy(waypoint).sub(villager.dir);
+    transportTangent(_toTarget, villager.dir, _toTarget);
+    moveOnSphere(villager.dir, _toTarget, villager.speed * dt, this.planet.radius);
+    villager.dir.normalize();
+    transportTangent(_toTarget, villager.dir, villager.facing);
   }
 
   private flush(): void {
@@ -184,10 +272,26 @@ export class Villagers {
     for (const villager of this.villagers) {
       villager.timer -= dt;
 
-      if (villager.waiting) {
-        // Stand still and face nothing in particular; the player is coming.
+      // A villager who becomes the delivery target stands up out of whatever
+      // they were doing and waits, which reads as being interrupted politely.
+      const stationary =
+        !villager.waiting &&
+        (villager.activity === 'tend' ||
+          villager.activity === 'sit' ||
+          villager.activity === 'chat');
+      villager.pose += (Number(stationary) - villager.pose) * damp(0.09, dt);
+
+      if (villager.waiting || stationary) {
         villager.state = 'idle';
         villager.speed += (0 - villager.speed) * damp(0.3, dt);
+        if (villager.facingPoint) {
+          _toTarget.copy(villager.facingPoint).sub(villager.dir);
+          if (_toTarget.lengthSq() > 1e-9) {
+            transportTangent(_toTarget, villager.dir, villager.facing);
+          }
+        }
+      } else if (villager.activity === 'commute' && villager.route) {
+        this.followRoute(villager, dt);
       } else if (villager.state === 'idle') {
         villager.speed += (0 - villager.speed) * damp(0.25, dt);
         if (villager.timer <= 0) {
