@@ -36,6 +36,11 @@ export const PALETTE = {
   water: 0x3fa3da,
   waterDeep: 0x2b74b0,
 
+  // Built surfaces
+  asphalt: 0x6f7480,
+  kerb: 0xb9b7ae,
+  concrete: 0xc3c0b6,
+
   // Built things
   wall: 0xf6e8cf,
   wallAlt: 0xe9d5b3,

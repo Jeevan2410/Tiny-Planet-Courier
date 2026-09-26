@@ -305,7 +305,8 @@ export class ScatterField {
     }
     const candidates: Candidate[] = [];
     for (const dir of points) {
-      const blockedAll = this.isExcluded(dir, false);
+      // Nothing grows in the middle of the street.
+      const blockedAll = this.isExcluded(dir, false) || this.planet.pathFactor(dir) > 0.3;
       const blockedLarge = blockedAll || this.isExcluded(dir, true);
       if (blockedAll && blockedLarge) continue;
       const height = this.planet.heightAt(dir);

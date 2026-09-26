@@ -82,7 +82,7 @@ export class Delivery {
     this.beaconMesh.frustumCulled = false;
     this.beaconMesh.renderOrder = 5;
     this.beaconMesh.castShadow = false;
-    addOutline(this.beaconMesh, { width: 0.03 });
+    addOutline(this.beaconMesh, { width: CONFIG.render.outlineWidth * 1.6, jitter: 0.15 });
     this.group.add(this.beaconMesh);
 
     this.target = { kind: 'depot', name: 'Harborlight Depot', zoneName: 'Harborlight Meadow' };

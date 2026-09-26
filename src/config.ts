@@ -73,7 +73,14 @@ export const CONFIG = {
     /** Devicepixelratio caps per quality tier. */
     maxPixelRatioHigh: 2,
     maxPixelRatioLow: 1,
-    outlineWidth: 0.022,
+    /**
+     * Outline thickness as a fraction of view depth: the shader expands in view
+     * space scaled by distance, so this is roughly a constant screen width
+     * rather than an object-space offset.
+     */
+    outlineWidth: 0.0072,
+    /** Per-vertex width variation, which is what makes the line read as ink. */
+    outlineJitter: 0.32,
     /** Radius around the camera within which small scatter props are drawn. */
     scatterDrawDistanceHigh: 46,
     scatterDrawDistanceLow: 26,

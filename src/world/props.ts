@@ -537,3 +537,138 @@ export function beacon(): BufferGeometry {
   a.add(new ConeGeometry(0.2, 0.3, 4), 0xfff3c4, place(0, 0.95, 0, 1, Math.PI / 4));
   return a.build('beacon');
 }
+
+// ------------------------------------------------------------ street dressing
+//
+// The props below exist to make the town read as a place somebody lives rather
+// than an arrangement of houses on a lawn. Density of incidental detail -- the
+// air conditioner, the bins, the crate of plants by the door -- is most of what
+// separates a hand-built town from a scattered one.
+
+/** Utility pole with a crossarm and insulators. */
+export function utilityPole(rng: Rng): BufferGeometry {
+  const a = new Assembly();
+  const h = randRange(rng, 4.6, 5.8);
+  a.add(new CylinderGeometry(0.09, 0.13, h, 7), PALETTE.woodDark, place(0, h / 2, 0));
+
+  // Crossarms near the top.
+  for (let i = 0; i < 2; i++) {
+    const y = h - 0.35 - i * 0.55;
+    a.block(1.5, 0.09, 0.11, 0, y, 0, PALETTE.wood);
+    for (const sx of [-1, 1]) {
+      a.add(new CylinderGeometry(0.05, 0.05, 0.16, 5), PALETTE.window, place(sx * 0.62, y + 0.12, 0));
+    }
+  }
+  // Transformer can.
+  if (rng() < 0.5) {
+    a.add(new CylinderGeometry(0.19, 0.19, 0.5, 8), PALETTE.metalDark, place(0.24, h * 0.66, 0));
+  }
+  return a.build('utilityPole');
+}
+
+/** Wall-mounted air conditioning unit, hung on the side of a building. */
+export function airConditioner(): BufferGeometry {
+  const a = new Assembly();
+  a.block(0.62, 0.42, 0.3, 0, 0, 0, PALETTE.wallAlt);
+  a.block(0.5, 0.32, 0.03, 0, 0, 0.16, PALETTE.metalDark);
+  a.add(new CylinderGeometry(0.13, 0.13, 0.03, 8), PALETTE.metal, place(0, 0, 0.18));
+  a.block(0.66, 0.05, 0.34, 0, 0.22, 0, PALETTE.metal);
+  return a.build('airConditioner');
+}
+
+export function vendingMachine(rng: Rng): BufferGeometry {
+  const a = new Assembly();
+  const body = pick(rng, [0xd9534f, 0x3f7fd6, 0x37a86c]);
+  a.block(0.9, 1.75, 0.6, 0, 0.875, 0, body);
+  // Glass front with three shelves of product.
+  a.block(0.62, 1.15, 0.05, -0.1, 1.05, 0.31, PALETTE.window);
+  for (let i = 0; i < 3; i++) {
+    a.block(0.56, 0.06, 0.04, -0.1, 0.65 + i * 0.36, 0.33, PALETTE.wallAlt);
+  }
+  a.block(0.22, 0.5, 0.05, 0.28, 1.05, 0.31, PALETTE.metalDark);
+  a.block(0.86, 0.12, 0.05, 0, 0.32, 0.31, PALETTE.metalDark);
+  a.block(0.94, 0.08, 0.64, 0, 1.79, 0, PALETTE.accent);
+  return a.build('vendingMachine');
+}
+
+export function postbox(): BufferGeometry {
+  const a = new Assembly();
+  a.add(new CylinderGeometry(0.26, 0.28, 1.25, 10), PALETTE.mailbox, place(0, 0.625, 0));
+  a.add(new SphereGeometry(0.26, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.5), PALETTE.mailbox, place(0, 1.25, 0));
+  a.block(0.3, 0.07, 0.05, 0, 1.12, 0.26, 0x2c2c30);
+  a.add(new CylinderGeometry(0.3, 0.3, 0.07, 10), PALETTE.rockDark, place(0, 0.035, 0));
+  return a.build('postbox');
+}
+
+export function trafficCone(): BufferGeometry {
+  const a = new Assembly();
+  a.block(0.34, 0.05, 0.34, 0, 0.025, 0, 0xe2662f);
+  a.add(new ConeGeometry(0.14, 0.55, 7), 0xe2662f, place(0, 0.3, 0));
+  a.add(new CylinderGeometry(0.1, 0.115, 0.09, 7), 0xfdf6e8, place(0, 0.33, 0));
+  return a.build('trafficCone');
+}
+
+/** Planter with a couple of leafy shoots -- the classic doorstep pot. */
+export function planter(rng: Rng): BufferGeometry {
+  const a = new Assembly();
+  const r = randRange(rng, 0.17, 0.24);
+  a.add(new CylinderGeometry(r, r * 0.78, 0.3, 8), PALETTE.pipe, place(0, 0.15, 0));
+  a.add(new CylinderGeometry(r * 1.06, r * 1.06, 0.05, 8), 0xa85f34, place(0, 0.3, 0));
+  const shoots = 2 + Math.floor(rng() * 2);
+  for (let i = 0; i < shoots; i++) {
+    const blade = new ConeGeometry(0.07, randRange(rng, 0.3, 0.5), 3);
+    const m = place(randRange(rng, -0.08, 0.08), 0.45, randRange(rng, -0.08, 0.08));
+    m.multiply(new Matrix4().makeRotationZ(randRange(rng, -0.4, 0.4)));
+    a.add(blade, pick(rng, [PALETTE.leaf, 0x4f9c3d]), m);
+  }
+  return a.build('planter');
+}
+
+export function wheelieBin(rng: Rng): BufferGeometry {
+  const a = new Assembly();
+  const color = pick(rng, [0x4a7f5c, 0x3f6f9e, 0x7a7f86]);
+  a.block(0.46, 0.62, 0.4, 0, 0.42, 0, color);
+  a.block(0.5, 0.07, 0.44, 0, 0.76, 0, shadeColor(color, 0.25));
+  for (const sx of [-1, 1]) {
+    a.add(new CylinderGeometry(0.09, 0.09, 0.05, 8), 0x2c2c30, place(sx * 0.2, 0.09, -0.12).multiply(new Matrix4().makeRotationZ(Math.PI / 2)));
+  }
+  return a.build('wheelieBin');
+}
+
+/** Flat road furniture: a manhole cover painted onto the street. */
+export function manhole(): BufferGeometry {
+  const a = new Assembly();
+  a.add(new CylinderGeometry(0.34, 0.34, 0.04, 12), PALETTE.metalDark, place(0, 0.02, 0));
+  a.add(new CylinderGeometry(0.24, 0.24, 0.05, 12), 0x5f646e, place(0, 0.035, 0));
+  return a.build('manhole');
+}
+
+/** Low kerb wall used to edge a forecourt. */
+export function lowWall(rng: Rng): BufferGeometry {
+  const a = new Assembly();
+  const len = randRange(rng, 1.6, 2.6);
+  a.block(len, 0.42, 0.22, 0, 0.21, 0, PALETTE.concrete);
+  a.block(len * 1.02, 0.07, 0.28, 0, 0.44, 0, PALETTE.kerb);
+  return a.build('lowWall');
+}
+
+/** Shop awning + sign board, mounted against a wall. */
+export function shopFront(rng: Rng): BufferGeometry {
+  const a = new Assembly();
+  const color = pick(rng, [PALETTE.roofTeal, PALETTE.roofRed, PALETTE.roofBlue]);
+  a.block(2.1, 0.5, 0.14, 0, 1.55, 0, color);
+  a.block(1.7, 0.22, 0.06, 0, 1.55, 0.1, 0xfdf6e8);
+  // Striped awning below the sign.
+  for (let i = 0; i < 5; i++) {
+    a.block(0.4, 0.06, 0.62, -0.82 + i * 0.41, 1.22, 0.36, i % 2 === 0 ? 0xfdf6e8 : color);
+  }
+  a.block(2.2, 0.06, 0.08, 0, 1.15, 0.66, shadeColor(color, 0.3));
+  return a.build('shopFront');
+}
+
+function shadeColor(hex: number, amount: number): number {
+  const r = Math.round(((hex >> 16) & 255) * (1 - amount));
+  const g = Math.round(((hex >> 8) & 255) * (1 - amount));
+  const b = Math.round((hex & 255) * (1 - amount));
+  return (r << 16) | (g << 8) | b;
+}

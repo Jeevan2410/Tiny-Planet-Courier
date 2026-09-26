@@ -118,8 +118,23 @@ export class FollowCamera {
     this.camera.lookAt(this.lookTarget);
   }
 
-  /** Keep the camera above ground and out of buildings. */
+  /**
+   * Keep the camera above ground and out of buildings.
+   *
+   * Terrain is resolved FIRST and buildings second, deliberately. The other
+   * order looks equivalent but is not: lifting the camera out of a hillside can
+   * push it up into a roof, and nothing would then test for that. Doing the
+   * building raycast last guarantees the final position has an unobstructed
+   * line back to the player, which is the property that actually matters.
+   */
   private resolveCollisions(up: Vector3): void {
+    // Terrain: analytic, so this is a height lookup rather than a sweep test.
+    _camDir.copy(this.camera.position).normalize();
+    const floor = Math.max(this.planet.heightAt(_camDir), this.planet.seaLevel) + 0.7;
+    if (this.camera.position.length() < floor) {
+      this.camera.position.copy(_camDir).multiplyScalar(floor);
+    }
+
     // Buildings: cast from the player's head out to the camera and stop short of
     // the first wall in the way.
     if (this.colliders.length > 0) {
@@ -142,13 +157,7 @@ export class FollowCamera {
       }
     }
 
-    // Terrain: analytic, so this is a height lookup rather than a sweep test.
-    _camDir.copy(this.camera.position).normalize();
-    const floor = Math.max(this.planet.heightAt(_camDir), this.planet.seaLevel) + 0.7;
-    if (this.camera.position.length() < floor) {
-      this.camera.position.copy(_camDir).multiplyScalar(floor);
-    }
-    // Never let the correction push the camera below the player's own feet.
+    // Never let a correction drop the camera below the player's own feet.
     const minimum = this.lookTarget.dot(up) - CONFIG.player.headHeight + 0.25;
     if (this.camera.position.dot(up) < minimum) {
       this.camera.position.addScaledVector(up, minimum - this.camera.position.dot(up));

@@ -32,6 +32,25 @@ interface FlatSpot {
   height: number;
 }
 
+/**
+ * A road, stored as a densely-sampled polyline of unit directions.
+ *
+ * Roads are painted into the terrain's vertex colours rather than laid down as
+ * separate geometry: no extra draw calls, no z-fighting against a curved
+ * surface, and no need to make a flat slab follow a hill. The bounding cone
+ * lets the per-vertex lookup reject the ~99% of the planet a given road is
+ * nowhere near before it touches a single sample.
+ */
+interface Path {
+  samples: Float32Array;
+  count: number;
+  /** Half-width of the carriageway in world units. */
+  width: number;
+  center: Vector3;
+  /** Cosine of (cone half-angle + width), precomputed for the early-out. */
+  cullCos: number;
+}
+
 const _dir = new Vector3();
 const _n = new Vector3();
 const _ax = new Vector3();
@@ -60,6 +79,7 @@ export class Planet {
 
   private readonly weights = new Float32Array(ZONES.length);
   private readonly flats: FlatSpot[] = [];
+  private readonly paths: Path[] = [];
 
   constructor(seed = CONFIG.planet.seed) {
     this.group.name = 'planet';
@@ -123,6 +143,94 @@ export class Planet {
   addFlatSpot(center: Vector3, angularRadius: number): void {
     const dir = center.clone().normalize();
     this.flats.push({ center: dir, radius: angularRadius, height: this.rawHeight(dir) });
+  }
+
+  /**
+   * Register a road. Must be called before `build()`, since roads are baked
+   * into the terrain's vertex colours.
+   *
+   * @param points  waypoints as directions (need not be normalised)
+   * @param width   half-width of the carriageway in world units
+   * @param spacing distance between generated samples; smaller is smoother but
+   *                costs more per-vertex work during generation
+   */
+  addPath(points: Vector3[], width: number, spacing = 0.45): void {
+    if (points.length < 2) return;
+
+    const samples: number[] = [];
+    const a = new Vector3();
+    const b = new Vector3();
+    const s = new Vector3();
+
+    for (let i = 0; i < points.length - 1; i++) {
+      a.copy(points[i]).normalize();
+      b.copy(points[i + 1]).normalize();
+      const angle = Math.acos(clamp(a.dot(b), -1, 1));
+      const arc = angle * this.radius;
+      const steps = Math.max(1, Math.ceil(arc / spacing));
+      for (let step = 0; step < steps; step++) {
+        // Straight lerp then renormalise: at this spacing it is
+        // indistinguishable from a slerp and much cheaper.
+        s.copy(a).lerp(b, step / steps).normalize();
+        samples.push(s.x, s.y, s.z);
+      }
+    }
+    const last = points[points.length - 1].clone().normalize();
+    samples.push(last.x, last.y, last.z);
+
+    const count = samples.length / 3;
+    const center = new Vector3();
+    for (let i = 0; i < count; i++) {
+      center.x += samples[i * 3];
+      center.y += samples[i * 3 + 1];
+      center.z += samples[i * 3 + 2];
+    }
+    center.normalize();
+
+    // Widest angle from the centroid to any sample, plus the road's own width
+    // and a margin, gives a cone that provably contains the whole road.
+    let minDot = 1;
+    for (let i = 0; i < count; i++) {
+      const dot = center.x * samples[i * 3] + center.y * samples[i * 3 + 1] + center.z * samples[i * 3 + 2];
+      if (dot < minDot) minDot = dot;
+    }
+    const coneAngle = Math.acos(clamp(minDot, -1, 1)) + (width * 1.6) / this.radius + 0.01;
+
+    this.paths.push({
+      samples: new Float32Array(samples),
+      count,
+      width,
+      center,
+      cullCos: Math.cos(Math.min(Math.PI, coneAngle)),
+    });
+  }
+
+  /**
+   * How much of a road covers this direction: 1 on the carriageway, falling to
+   * 0 across the kerb. Shared by the terrain colouring and the prop scatterer,
+   * so nothing grows in the middle of the street.
+   */
+  pathFactor(d: Vector3): number {
+    if (this.paths.length === 0) return 0;
+    let best = 0;
+
+    for (let p = 0; p < this.paths.length; p++) {
+      const path = this.paths[p];
+      if (d.dot(path.center) < path.cullCos) continue;
+
+      // Track the largest dot product rather than the smallest distance: one
+      // acos at the end instead of one per sample.
+      let maxDot = -1;
+      const { samples, count } = path;
+      for (let i = 0; i < count; i++) {
+        const dot = d.x * samples[i * 3] + d.y * samples[i * 3 + 1] + d.z * samples[i * 3 + 2];
+        if (dot > maxDot) maxDot = dot;
+      }
+      const distance = Math.acos(clamp(maxDot, -1, 1)) * this.radius;
+      const coverage = smoothstep(path.width * 1.22, path.width * 0.78, distance);
+      if (coverage > best) best = coverage;
+    }
+    return best;
   }
 
   /** World-space point on the ground for a direction. */
@@ -299,6 +407,15 @@ export class Planet {
     const dusting = smoothstep(1.02, 1.3, elev) * 0.85;
     const snow = Math.max(snowWeight, dusting) * (1 - smoothstep(0.34, 0.6, slope) * 0.55);
     if (snow > 0) out.lerp(srgb(PALETTE.snow, _c1), Math.min(1, snow));
+
+    // Roads last, so they sit on top of grass, snow and beach alike.
+    const road = this.pathFactor(d);
+    if (road > 0) {
+      // A pale kerb band at the edge before the asphalt proper: without it the
+      // road reads as a stain rather than a built surface.
+      out.lerp(srgb(PALETTE.kerb, _c1), Math.min(1, road * 1.9));
+      out.lerp(srgb(PALETTE.asphalt, _c1), smoothstep(0.45, 0.85, road));
+    }
 
     return out;
   }

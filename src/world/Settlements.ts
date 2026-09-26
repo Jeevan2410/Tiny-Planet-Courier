@@ -119,6 +119,14 @@ const SETTLEMENTS: SettlementSpec[] = [
   { id: 'frostcap', zoneId: 'frost', offset: [2, -3], terrace: 0.13, kind: 'hamlet' },
 ];
 
+/** Radius of the town's ring road, in world units from the village green. */
+const RING_RADIUS = 6.8;
+const TOWN_HOUSES = 10;
+/** Half the depth of a standard house, so wall-mounted props land on the wall. */
+const HOUSE_HALF_DEPTH = 1.1;
+/** Fixed so the roads laid in reserve() line up with the houses built later. */
+const houseAngle = (i: number) => (i / TOWN_HOUSES) * Math.PI * 2 + 0.22;
+
 const _up = new Vector3();
 const _pos = new Vector3();
 const _q = new Quaternion();
@@ -182,6 +190,37 @@ export class Settlements {
     const town = this.sites.get('harborlight')!;
     this.depotDir.copy(town.at(0, 3.4));
     this.spawnDir.copy(town.at(0, 0.4));
+    this.layStreets(town);
+  }
+
+  /**
+   * Lay the town's roads. These are painted into the terrain's vertex colours,
+   * so they have to be registered before the planet mesh is generated.
+   *
+   * House angles are fixed rather than random precisely so this can run before
+   * `buildTown` and still line the driveways up with the houses.
+   */
+  private layStreets(town: LocalFrame): void {
+    // The ring road: sits between the village green and the houses.
+    const ring: Vector3[] = [];
+    const segments = 30;
+    for (let i = 0; i <= segments; i++) {
+      ring.push(town.ring((i / segments) * Math.PI * 2, RING_RADIUS));
+    }
+    this.planet.addPath(ring, 1.15);
+
+    // Spur from the ring up to the depot forecourt.
+    this.planet.addPath([town.at(0, RING_RADIUS), town.at(0, 4.5)], 0.95);
+
+    // A driveway out to each house plot.
+    for (let i = 0; i < TOWN_HOUSES; i++) {
+      const angle = houseAngle(i);
+      this.planet.addPath(
+        [town.ring(angle, RING_RADIUS - 0.3), town.ring(angle, 8.5)],
+        0.5,
+        0.35,
+      );
+    }
   }
 
   /**
@@ -312,10 +351,10 @@ export class Settlements {
     const plaza = frame.center;
     const dir = new Vector3();
 
-    // Ring of houses facing the plaza.
-    const houseCount = 10;
+    // Ring of houses facing the plaza, one per driveway.
+    const houseCount = TOWN_HOUSES;
     for (let i = 0; i < houseCount; i++) {
-      const angle = (i / houseCount) * Math.PI * 2 + 0.22;
+      const angle = houseAngle(i);
       const distance = randRange(rng, 8.4, 10.4);
       frame.ring(angle, distance, dir);
       if (!this.isBuildable(dir)) continue;
@@ -332,6 +371,29 @@ export class Settlements {
       if (rng() < 0.5) {
         const fenceDir = frame.ring(angle + 0.055, distance - 1.6, new Vector3());
         this.addStatic(spec.id, props.fence(), fenceDir, this.facingToward(fenceDir, plaza), -0.05);
+      }
+
+      // Doorstep dressing. This has to live here, where the plot's actual
+      // distance is known: placing it at a fixed radius left wall-mounted props
+      // hanging in mid-air in front of the houses set further back.
+      const frontWall = distance - HOUSE_HALF_DEPTH;
+
+      if (rng() < 0.62) {
+        const potDir = frame.ring(angle + 0.04, frontWall - 0.5, new Vector3());
+        this.addStatic(spec.id, props.planter(rng), potDir, this.facingToward(potDir, plaza), -0.03);
+      }
+      if (rng() < 0.4) {
+        const binDir = frame.ring(angle - 0.05, frontWall - 0.45, new Vector3());
+        this.addStatic(spec.id, props.wheelieBin(rng), binDir, this.facingToward(binDir, plaza), -0.03);
+      }
+      if (rng() < 0.35) {
+        // Bolted to the front wall, just above the door.
+        const acDir = frame.ring(angle + 0.06, frontWall - 0.06, new Vector3());
+        this.addStatic(spec.id, props.airConditioner(), acDir, this.facingToward(acDir, plaza), 1.55);
+      }
+      if (rng() < 0.28) {
+        const shopDir = frame.ring(angle, frontWall - 0.04, new Vector3());
+        this.addStatic(spec.id, props.shopFront(rng), shopDir, this.facingToward(shopDir, plaza), -0.05);
       }
     }
 
@@ -388,9 +450,68 @@ export class Settlements {
       this.addStatic(spec.id, props.signpost(rng), dir, this.facingToward(dir, plaza), -0.05);
     }
 
+    this.dressStreets(spec, frame, rng);
+
     for (let i = 0; i < 5; i++) {
       const angle = (i / 5) * Math.PI * 2 + 0.7;
       this.npcSpawns.push({ dir: frame.ring(angle, randRange(rng, 2.6, 5.4)).clone(), roam: 3.2 });
+    }
+  }
+
+  /**
+   * Incidental street detail along the ring road.
+   *
+   * This is the difference between "houses on a lawn" and somewhere people
+   * live: poles and wires overhead, bins and planters by the doors, a vending
+   * machine humming on a corner. All of it merges into the settlement's single
+   * static batch, so the whole pass costs zero extra draw calls.
+   */
+  private dressStreets(spec: SettlementSpec, frame: LocalFrame, rng: Rng): void {
+    const plaza = frame.center;
+    const dir = new Vector3();
+    const outward = new Vector3();
+
+    // Utility poles just outside the kerb, spaced around the ring.
+    const poleCount = 7;
+    for (let i = 0; i < poleCount; i++) {
+      const angle = (i / poleCount) * Math.PI * 2 + 0.15;
+      frame.ring(angle, RING_RADIUS + 1.5, dir);
+      if (!this.isBuildable(dir)) continue;
+      this.addStatic(spec.id, props.utilityPole(rng), dir, this.facingToward(dir, plaza), -0.2);
+      this.addBlocker(dir, 0.35);
+    }
+
+    // Manhole covers down the middle of the carriageway.
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2 + 0.55;
+      frame.ring(angle, RING_RADIUS, dir);
+      this.addStatic(spec.id, props.manhole(), dir, this.facingToward(dir, plaza), -0.01);
+    }
+
+    // A corner with a vending machine, a postbox and a couple of cones.
+    const corner = frame.ring(1.9, RING_RADIUS + 1.0, new Vector3());
+    if (this.isBuildable(corner)) {
+      outward.copy(this.facingToward(corner, plaza)).negate();
+      this.addStatic(spec.id, props.vendingMachine(rng), corner, outward, -0.05);
+      this.addBlocker(corner, 0.6);
+    }
+
+    const boxDir = frame.at(2.1, 4.6, new Vector3());
+    if (this.isBuildable(boxDir)) {
+      this.addStatic(spec.id, props.postbox(), boxDir, this.facingToward(boxDir, plaza), -0.05);
+      this.addBlocker(boxDir, 0.4);
+    }
+
+    for (const [x, y] of [[-2.6, 5.3], [-2.2, 5.9]] as const) {
+      const coneDir = frame.at(x, y, new Vector3());
+      this.addStatic(spec.id, props.trafficCone(), coneDir, this.facingToward(coneDir, plaza), -0.02);
+    }
+
+    // Low walls edging the depot forecourt.
+    for (const [x, y] of [[-3.4, 4.6], [3.4, 4.6]] as const) {
+      const wallDir = frame.at(x, y, new Vector3());
+      if (!this.isBuildable(wallDir)) continue;
+      this.addStatic(spec.id, props.lowWall(rng), wallDir, this.facingToward(wallDir, this.depotDir), -0.05);
     }
   }
 

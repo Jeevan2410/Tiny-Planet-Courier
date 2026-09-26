@@ -123,8 +123,18 @@ there:
 - **Instance-level LOD.** Every 150ms the scatter field repacks each instance
   buffer so only props within their draw distance are submitted, and lowers
   `count` to match. Grass has a 30-unit radius; trees get 60.
+- **Roads painted into vertex colours.** The town's ring road, depot spur and
+  driveways are polylines of unit directions sampled into `Planet.pathFactor()`,
+  which the terrain colouring blends to asphalt and the prop scatterer uses to
+  keep grass off the carriageway. No extra geometry, no extra draw calls, no
+  z-fighting against a curved surface, and no problem following a hill. A
+  per-road bounding cone rejects the ~97% of the planet a given road is nowhere
+  near before touching a single sample.
 - **Inverted-hull outlines.** One extra draw call per object rather than a
-  full-screen post-process pass — which matters on phones.
+  full-screen post-process pass — which matters on phones. The hull is expanded
+  in *view* space scaled by depth, so the line stays a roughly constant width on
+  screen instead of thinning out with distance, with a per-vertex hash varying
+  the width so it reads as drawn ink rather than a uniform offset.
 - **A shadow camera that follows the player.** A frustum wide enough for the
   whole planet would spend almost all its resolution on ground you cannot see.
 
