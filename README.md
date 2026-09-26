@@ -308,18 +308,46 @@ supabase/migrations/   Database schema
 
 ---
 
+## Adding real art
+
+The game ships with everything generated in code, but the pipeline for authored
+models is in place and working.
+
+```bash
+npm run assets:test-rig   # writes a stand-in rig to assets/source/ (optional)
+npm run assets            # optimise assets/source/*.glb -> public/models/
+```
+
+`scripts/optimize-assets.mjs` runs dedup → weld → resample → prune → WebP
+texture compression → Draco, and copies the matching Draco decoder into
+`public/draco/`. On the stand-in rig that is a 46% size reduction with all
+animation clips preserved.
+
+Drop a Blender export at `assets/source/courier.glb`, run `npm run assets`, and
+`src/player/rig.ts` picks it up automatically — for the local player *and* every
+remote player. With no model present it falls back to the procedural rig, so a
+fresh checkout runs identically.
+
+Conventions the exporter should follow (all optional):
+
+| Thing | Names |
+| --- | --- |
+| Animation clips | `idle`, `walk`, `run`, and optionally `handover`, `wave` |
+| Materials | `outfit`, `skin`, `hair` — tinted by the player's cosmetics |
+| Nodes | `head` — anchors emoji and name tags |
+
+Skinned and node-animated rigs both work. `public/models/` and `public/draco/`
+are generated artefacts and are gitignored.
+
 ## Deviations from the brief
 
 Worth stating plainly:
 
-- **No Blender or Houdini assets.** Every mesh in the game is generated from
+- **No authored art ships with the game.** Every mesh is generated from
   primitives in TypeScript at load time, and every sound is synthesised. This was
   a constraint of the build environment, not a preference — but it does mean the
-  game downloads ~267KB gzipped total and needs no CDN. `Courier.ts` documents
-  the seam: a rigged GLB can replace the procedural rig by implementing the same
-  small public surface (`root`, `setCosmetics`, `setPose`, `playGesture`,
-  `setCarrying`) against an `AnimationMixer`, and nothing outside that file knows
-  how the rig works.
+  game downloads ~270KB gzipped total and needs no CDN. The seam for replacing
+  it is real and tested, not aspirational: see "Adding real art" above.
 - **React Three Fiber was not used.** The brief listed it as optional; plain
   Three.js with a vanilla Zustand store keeps the bundle smaller and the frame
   loop explicit.

@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "server": "node server/src/index.ts",
-    "dev:all": "concurrently -k -n web,realtime -c cyan,magenta \"npm:dev\" \"npm:server\""
+    "dev:all": "concurrently -k -n web,realtime -c cyan,magenta \"npm:dev\" \"npm:server\"",
+    "assets": "node scripts/optimize-assets.mjs",
+    "assets:test-rig": "node scripts/make-test-rig.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -20,8 +22,13 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.0",
+    "@gltf-transform/extensions": "^4.5.0",
+    "@gltf-transform/functions": "^4.5.0",
     "@types/three": "^0.169.0",
     "concurrently": "^9.0.1",
+    "draco3dgltf": "^1.5.7",
+    "sharp": "^0.33.5",
     "socket.io": "^4.7.5",
     "typescript": "^5.6.2",
     "vite": "^5.4.8"

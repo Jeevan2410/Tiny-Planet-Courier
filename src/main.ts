@@ -29,7 +29,7 @@ import {
   type TransportHandlers,
 } from './net/transport';
 import { CharacterController } from './player/Controller';
-import { Courier } from './player/Courier';
+import { createCourierRig, initCourierRigs, type CourierRig } from './player/rig';
 import { FollowCamera } from './player/FollowCamera';
 import { Input } from './player/Input';
 import { getState, store, watch, type Cosmetics } from './state/store';
@@ -62,7 +62,7 @@ const remotePlayers = new RemotePlayers(planet);
 
 const controller = new CharacterController(planet);
 const followCamera = new FollowCamera(planet);
-let courier: Courier;
+let courier: CourierRig;
 let delivery: Delivery;
 
 const backend = new Backend(
@@ -153,8 +153,12 @@ async function buildWorld(): Promise<void> {
       {
         label: 'Tailoring your uniform',
         weight: 1,
-        run: () => {
-          courier = new Courier(getState().cosmetics);
+        run: async () => {
+          // Prefer an authored model from the asset pipeline; fall back to the
+          // procedural rig when there is none.
+          const kind = await initCourierRigs();
+          if (import.meta.env.DEV) console.info(`[rig] using the ${kind} courier`);
+          courier = createCourierRig(getState().cosmetics);
           courier.onFootstep = (speed) => audio.footstep(speed, controller.inWater);
           engine.scene.add(courier.root);
 

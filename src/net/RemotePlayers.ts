@@ -15,7 +15,7 @@
  */
 import { CanvasTexture, Group, LinearFilter, Sprite, SpriteMaterial, Vector3 } from 'three';
 import { CONFIG } from '../config';
-import { Courier } from '../player/Courier';
+import { createCourierRig, type CourierRig } from '../player/rig';
 import type { Cosmetics } from '../state/store';
 import { surfaceQuaternion, transportTangent } from '../util/sphere';
 import type { Planet } from '../world/Planet';
@@ -34,7 +34,7 @@ interface Snapshot {
 interface Peer {
   id: string;
   identity: PlayerIdentity;
-  courier: Courier;
+  courier: CourierRig;
   tag: Sprite | null;
   buffer: Snapshot[];
   lastSeen: number;
@@ -131,7 +131,7 @@ export class RemotePlayers {
       skin: resolved.skin,
     };
 
-    const courier = new Courier(cosmetics);
+    const courier = createCourierRig(cosmetics);
     courier.root.visible = false; // until the first snapshot places them
     this.group.add(courier.root);
 
