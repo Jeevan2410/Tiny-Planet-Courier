@@ -18,14 +18,14 @@
     "@supabase/supabase-js": "^2.45.4",
     "gsap": "^3.12.5",
     "socket.io-client": "^4.7.5",
-    "three": "^0.169.0",
+    "three": "^0.180.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.5.0",
     "@gltf-transform/extensions": "^4.5.0",
     "@gltf-transform/functions": "^4.5.0",
-    "@types/three": "^0.169.0",
+    "@types/three": "^0.180.0",
     "concurrently": "^9.0.1",
     "draco3dgltf": "^1.5.7",
     "sharp": "^0.33.5",
