@@ -7,13 +7,16 @@ export const CONFIG = {
     /** Base radius of the planet in world units. */
     radius: 22,
     /**
-     * Icosphere edge segments. Note this is PolyhedronGeometry's "detail", which
-     * splits each icosahedron edge into (detail + 1) segments -- it is NOT a
-     * recursion depth. 56 gives 20 * 57^2 = 64,980 triangles from 32,492 welded
-     * vertices: fine enough that the horizon reads as a curve rather than a
-     * polygon, cheap enough to generate in well under a second.
+     * Icosphere subdivision depth. Each level quadruples the face count, so 6
+     * gives 20 * 4^6 = 81,920 triangles from 40,962 welded vertices -- fine
+     * enough that the horizon reads as a curve rather than a polygon.
+     *
+     * The mesh is built by recursive midpoint subdivision in terrainMesh.ts
+     * rather than by three's IcosahedronGeometry, both to keep three out of the
+     * generation worker and because the midpoint cache welds vertices as it
+     * goes instead of emitting every triangle unindexed and welding afterwards.
      */
-    detail: 56,
+    subdivisions: 6,
     /** Peak-to-trough amplitude of the terrain displacement. */
     terrainAmplitude: 2.2,
     /** Radius of the water shell; terrain below this reads as ocean. */

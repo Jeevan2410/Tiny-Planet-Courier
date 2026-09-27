@@ -116,7 +116,9 @@ async function buildWorld(): Promise<void> {
       {
         label: 'Sculpting the planet',
         weight: 5,
-        run: () => planet.build(),
+        // Runs on a worker, so the progress bar keeps animating and the browser
+        // never sees a blocked main thread during the heaviest step.
+        run: () => planet.build((fraction) => progress((1 + fraction * 5) / 17, 'Sculpting the planet')),
       },
       {
         label: 'Raising roofs and lamp posts',

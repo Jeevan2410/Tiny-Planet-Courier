@@ -137,6 +137,13 @@ there:
   the width so it reads as drawn ink rather than a uniform offset.
 - **A shadow camera that follows the player.** A frustum wide enough for the
   whole planet would spend almost all its resolution on ground you cannot see.
+- **Generation on a worker, without shipping three twice.** The terrain field
+  (`field.ts`), the zone data and the mesh builder (`terrainMesh.ts`) are free
+  of any three import, so the worker bundle is 10kB rather than a second copy of
+  the library — which would have cost more download than the worker saves in
+  main-thread time. `Planet` is the thin three-facing layer over them, and the
+  worker rebuilds an identical field from a seed plus the registered building
+  sites and roads instead of being handed megabytes of geometry.
 
 ### Toon shading
 
@@ -365,6 +372,9 @@ Targets a stable 60fps on mid-range laptops and recent phones. If it dips, press
 ratio and scatter draw distance for roughly a 2.4× reduction in triangles and
 draw calls.
 
-World generation takes about 1.5s on a desktop: an icosphere of 32,492 welded
-vertices, ~2,400 scattered props and five settlements, all behind a progress bar
-that yields to the browser between steps.
+World generation runs **on a Web Worker**: an icosphere of 40,962 welded
+vertices displaced, normalled and coloured in ~185ms, plus ~2,300 scattered
+props and five settlements on the main thread. The worker keeps the heaviest
+step off the main thread entirely, which is what stops a phone browser offering
+to kill the page mid-load. If workers are unavailable it builds inline through
+the same code path.
