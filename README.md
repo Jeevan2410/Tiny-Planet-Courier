@@ -2,6 +2,8 @@
 
 **Play: <https://tiny-planet-courier.vercel.app>**
 
+![The courier at the parcel depot on the tiny planet, surrounded by houses and villagers, with the pickup prompt showing](docs/screenshot.jpg)
+
 A single-page, browser-based 3D delivery game. You play a courier on a miniature
 spherical planet, carrying parcels from the depot to mailboxes and villagers
 scattered across five biomes. Other players appear in real time and can throw
